@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Problem Set 5"
 format: html
 ---
 
@@ -15,7 +15,7 @@ Submission Steps (10 pts)
 1. This problem set is a paired problem set.
 2. Play paper, scissors, rock to determine who goes first. Call that person Partner 1.
 • Partner 1 (Daniel Avila, davila2020):
-• Partner 2 (name and cnet ID):
+• Partner 2 (Nasser Alshaya, alshaya):
 
 
 
@@ -23,7 +23,7 @@ Submission Steps (10 pts)
 can only share it with one partner so you will not be able to change it after your partner
 has accepted.
 4. “This submission is our work alone and complies with the 30538 integrity policy.” Add
-your initials to indicate your agreement: **DA** **__**
+your initials to indicate your agreement: **DA** **NA**
 
 
 
@@ -41,10 +41,17 @@ appropriate.
 import pandas as pd
 import altair as alt
 import time
+import requests
+from bs4 import BeautifulSoup
 
 import warnings 
 warnings.filterwarnings('ignore')
 alt.renderers.enable("png")
+
+url = "https://oig.hhs.gov/fraud/enforcement/"
+response = requests.get(url)
+soup = BeautifulSoup(response.text, 'lxml')
+soup.text[0:50]
 ```
 
 
@@ -57,6 +64,72 @@ page and scrape and collect the following into a dataset:
 • Category (e.g, “Criminal and Civil Actions”)
 • Link associated with the enforcement action
 Collect your output into a tidy dataframe and print its head.
+
+```{python}
+tag = soup.find_all("ul")
+ul_children = soup.find_all(lambda t: t.name == 'ul' and t.find_all("div"))
+
+# title of enforcement action
+ul_children_titles = soup.find_all(lambda t: t.name == 'ul' and t.find_all("a"))
+
+titles_list = []
+for title in ul_children_titles:
+    for a in title.find_all("a"):
+        text = a.get_text()
+        titles_list.append(text)
+
+     ## selecting only the titles, since the previous version of titles_list has extra text
+titles_list = titles_list[136:156]
+
+# date
+ul_children_date = soup.find_all(lambda t: t.name == 'div' and t.find_all("span"))
+
+dates_list = []
+for date in ul_children_date:
+    for span in date.find_all("span"):
+        date = span.get_text()
+        dates_list.append(date)
+
+dates_list = dates_list[33:53]
+
+
+# category
+ul_children_category = soup.find_all(lambda t: t.name == 'ul' and t.find_all("span") and t.find_all("li"))
+
+category_list = []
+for category in ul_children_category:
+    for li in category.find_all("li"):
+        category = li.get_text("")
+        category_list.append(category)
+
+for i in range(len(category_list)):
+    category_list[i] = category_list[i].replace("\n","")
+
+category_list = category_list[74:135]
+
+string_check = ["Criminal and Civil Actions", "State Enforcement Agencies"]
+
+category_list_new = []
+for i in range(len(category_list)):
+    if category_list[i] == string_check[0] or category_list[i] == string_check[1]:
+        category_list_new.append(category_list[i])
+    else:
+        pass
+
+#links
+links_list = []
+for item in ul_children:
+    for a in item.find_all('a'):
+        links_list.append(a["href"])
+
+df = pd.DataFrame({
+    "ea_titles": titles_list,
+    "dates": dates_list,
+    "categories": category_list_new,
+    "links": links_list})
+
+df.head()
+```
 
 
 2. (Partner 1) Crawling: Then for each enforcement action, click the link and collect
@@ -93,9 +166,110 @@ a. (Partner 2) Before writing out your function, write down pseudo-code of the s
 your function will go through. If you use a loop, discuss what kind of loop you will use
 and how you will define it.
 
+```
+1. Define a function which takes two inpust: year, month
+2. Inside the function specify an if condition, if less than 2013 print message and return empty.
+3. Create two datetime objects for start and end times.
+4. Assign the url to a string, create a response object and use it to create a soup object.
+5. Create an empty list for all_actions, assign current_date to start_date.
+6. Using a for loop, iterate over the list of actions using soup objects with tag "ul" and class "usa-card-group padding-y-0".
+7. Iterate over elements inside list of actions using soup objects with tag "li" and class "usa-card card--list pep-card--minimal mobile:grid-col-12"
+8. Assign content to be extracted as the following:
+    title: ul_children_titles = soup.find_all(lambda t: t.name == 'ul' and t.find_all("a"))
+    date: ul_children_date = soup.find_all(lambda t: t.name == 'div' and t.find_all("span")).
+    category:ul_children_category = soup.find_all(lambda t: t.name == 'ul' and t.find_all("span") and t.find_all("li"))
+    link:
+
+```
+
 b. (Partner 2) Now code up your dynamic scraper and run it to start collecting the enforce-
 ment actions since January 2023. How many enforcement actions do you get in your final
 dataframe? What is the date and details of the earliest enforcement action it scraped?
+
+```{python}
+import datetime
+def scrape_hhs_oig(year, month):
+    """
+    Scrapes the HHS OIG's Enforcement Actions page for a given year and month.
+
+    Args:
+        year (int): The year to filter by.
+        month (int): The month to filter by.
+
+    Returns:
+        list: A list of dictionaries, each containing the scraped data.
+    """
+
+    url = "https://oig.hhs.gov/fraud/enforcement-actions"
+
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    if year < 2013:
+        print("Please input a year greater than or equal to 2013.")
+        return
+
+    start_date = datetime.datetime(year, month, 1)
+    end_date = datetime.datetime.now()
+
+    all_actions = []
+    current_date = start_date
+
+    enforcement_actions = {"ea_titles":[],
+    "dates":[],
+    "categories":[],
+    "links":[]}
+
+
+    ul_children = soup.find_all(lambda t: t.name == 'ul' and t.find_all("div"))
+    for action in ul_children:
+        title = action.find_all("h2")
+        date = action.find_all(lambda t: t.name == "div" and t.find_all("span"))
+        categories = action.find_all(lambda t: t.name == "div" and t.find_all("ul"))
+        link = action.find_all("a")
+        enforcement_actions["ea_titles"].add(title.get_text())
+        enforcement_actions["dates"].add(date.get_text())
+        enforcement_actions["categories"].add(categories.get_text())
+        enforcement_actions["links"].add(link.get_text())
+
+    df_enforcements = pd.DataFrame(enforcement_actions)
+
+    return df_enforcements
+```
+
+```{python}
+df_test = scrape_hhs_oig(2023, 11).head()
+```
+
+```{python}
+test =[]
+
+# Iterate over each list item under ul
+for li in soup.find_all('li', class_='usa-card'):
+    item = {}
+
+    # Extract title and link
+    h2 = li.find('h2', class_='usa-card__heading')
+    if h2:
+        a_tag = h2.find('a', href=True)
+        if a_tag:
+            item['title'] = a_tag.get_text(strip=True)
+            item['link'] = a_tag['href']
+    
+    # Extract date and category
+    date_span = li.find('span', class_='text-base-dark')
+    if date_span:
+        item['date'] = date_span.get_text(strip=True)
+    
+    category_li = li.find(lambda t: t.name == 'header' and t.find('div') and t.find('span') and t.find('ul'))
+    if category_li:
+        item['category'] = category_li.get_text(strip=True)
+
+    # Append item to data list if it has content
+    if item:
+        test.append(item)
+
+```
 
 c. (Partner 1) Now, let’s go a little further back. Test your partner’s code by collecting
 the actions since January 2021. Note that this can take a while. How many enforcement
