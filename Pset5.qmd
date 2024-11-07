@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Problem Set 5"
 format: html
 ---
 
@@ -41,10 +41,17 @@ appropriate.
 import pandas as pd
 import altair as alt
 import time
+import requests
+from bs4 import BeautifulSoup
 
 import warnings 
 warnings.filterwarnings('ignore')
 alt.renderers.enable("png")
+
+url = "https://oig.hhs.gov/fraud/enforcement/"
+response = requests.get(url)
+soup = BeautifulSoup(response.text, 'lxml')
+soup.text[0:50]
 ```
 
 
@@ -57,6 +64,72 @@ page and scrape and collect the following into a dataset:
 • Category (e.g, “Criminal and Civil Actions”)
 • Link associated with the enforcement action
 Collect your output into a tidy dataframe and print its head.
+
+```{python}
+tag = soup.find_all("ul")
+ul_children = soup.find_all(lambda t: t.name == 'ul' and t.find_all("div"))
+
+# title of enforcement action
+ul_children_titles = soup.find_all(lambda t: t.name == 'ul' and t.find_all("a"))
+
+titles_list = []
+for title in ul_children_titles:
+    for a in title.find_all("a"):
+        text = a.get_text()
+        titles_list.append(text)
+
+     ## selecting only the titles, since the previous version of titles_list has extra text
+titles_list = titles_list[136:156]
+
+# date
+ul_children_date = soup.find_all(lambda t: t.name == 'div' and t.find_all("span"))
+
+dates_list = []
+for date in ul_children_date:
+    for span in date.find_all("span"):
+        date = span.get_text()
+        dates_list.append(date)
+
+dates_list = dates_list[33:53]
+
+
+# category
+ul_children_category = soup.find_all(lambda t: t.name == 'ul' and t.find_all("span") and t.find_all("li"))
+
+category_list = []
+for category in ul_children_category:
+    for li in category.find_all("li"):
+        category = li.get_text()
+        category_list.append(category)
+
+for i in range(len(category_list)):
+    category_list[i] = category_list[i].replace("\n","")
+
+category_list = category_list[74:135]
+
+string_check = ["Criminal and Civil Actions", "State Enforcement Agencies"]
+
+category_list_new = []
+for i in range(len(category_list)):
+    if category_list[i] == string_check[0] or category_list[i] == string_check[1]:
+        category_list_new.append(category_list[i])
+    else:
+        pass
+
+#links
+links_list = []
+for item in ul_children:
+    for a in item.find_all('a'):
+        links_list.append(a["href"])
+
+df = pd.DataFrame({
+    "ea_titles": titles_list,
+    "dates": dates_list,
+    "categories": category_list_new,
+    "links": links_list})
+
+df.head()
+```
 
 
 2. (Partner 1) Crawling: Then for each enforcement action, click the link and collect
