@@ -197,48 +197,132 @@ def scrape_hhs_oig(year, month):
         month (int): The month to filter by.
 
     Returns:
-        list: A list of dictionaries, each containing the scraped data.
+        list: A dataframe containing the scraped data.
     """
-
-    url = "https://oig.hhs.gov/fraud/enforcement-actions"
-
+    url = "https://oig.hhs.gov/fraud/enforcement/"
     response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-
+    soup = BeautifulSoup(response.text, 'lxml')
+    start_date = datetime.datetime(year, month, 1)
     if year < 2013:
         print("Please input a year greater than or equal to 2013.")
         return
+    enforcements =[]
+    # Iterate over each item under ul
+    for li in soup.find_all('li', class_='usa-card'):
+        item = {}
+        # Extract title and link
+        h2 = li.find('h2', class_='usa-card__heading')
+        a_tag = h2.find('a', href=True)
+        item['title'] = a_tag.get_text(strip=True)
+        item['link'] = a_tag['href']
+        # Extract date and category
+        date_span = li.find('span', class_='text-base-dark')
+        item['date'] = date_span.get_text(strip=True)
+        
+        category_li = li.find('ul', 
+        class_ = 'display-inline add-list-reset')
+        item['category'] = category_li.get_text(strip=True)
 
-    start_date = datetime.datetime(year, month, 1)
-    end_date = datetime.datetime.now()
+        # Append item to data list if it has content
+        enforcements.append(item)
+    '''
+    # Crawling:
+    for i in range(41):
+        link = f'https://oig.hhs.gov/fraud/enforcement/?page={i}'
+        response = requests.get(link)
+        soup = BeautifulSoup(response.text, 'lxml')
+        for li in soup.find_all('li', class_='usa-card'):
+        # Extract title and link
+            h2 = li.find('h2', class_='usa-card__heading')
+            a_tag = h2.find('a', href=True)
+            item['title'] = a_tag.get_text(strip=True)
+            item['link'] = a_tag['href']
+            # Extract date and category
+            date_span = li.find('span', class_='text-base-dark')
+            item['date'] = date_span.get_text(strip=True)
+            
+            category_li = li.find(lambda t: t.name == 'header' and t.find('div') and t.find('span') and t.find('ul'))
+            item['category'] = category_li.get_text(strip=True)
+            print(link)
+        # Add a 1-second delay between requests
+        time.sleep(1)
+    '''
+    # Creating dataframe of enforcements:
+    df_enforcements = pd.DataFrame(enforcements)
 
-    all_actions = []
-    current_date = start_date
-
-    enforcement_actions = {"ea_titles":[],
-    "dates":[],
-    "categories":[],
-    "links":[]}
-
-
-    ul_children = soup.find_all(lambda t: t.name == 'ul' and t.find_all("div"))
-    for action in ul_children:
-        title = action.find_all("h2")
-        date = action.find_all(lambda t: t.name == "div" and t.find_all("span"))
-        categories = action.find_all(lambda t: t.name == "div" and t.find_all("ul"))
-        link = action.find_all("a")
-        enforcement_actions["ea_titles"].add(title.get_text())
-        enforcement_actions["dates"].add(date.get_text())
-        enforcement_actions["categories"].add(categories.get_text())
-        enforcement_actions["links"].add(link.get_text())
-
-    df_enforcements = pd.DataFrame(enforcement_actions)
+    df_enforcements["date"] = pd.to_datetime(
+        df_enforcements["date"])
+    df_enforcements = df_enforcements[(df_enforcements["date"]
+    >= start_date) & 
+    (df_enforcements["date"] <= datetime.datetime.now())]
 
     return df_enforcements
 ```
 
 ```{python}
-df_test = scrape_hhs_oig(2023, 11).head()
+import datetime
+def scrape_hhs_oig(year, month):
+    """
+    Scrapes the HHS OIG's Enforcement Actions page for a given year and month.
+
+    Args:
+        year (int): The year to filter by.
+        month (int): The month to filter by.
+
+    Returns:
+        list: A dataframe containing the scraped data.
+    """
+    start_date = datetime.datetime(year, month, 1)
+    if year < 2013:
+        print("Please input a year greater than or equal to 2013.")
+        return
+    enforcements =[]
+    # Crawling:
+    for i in range(41):
+        link = f'https://oig.hhs.gov/fraud/enforcement/?page={i}'
+        response = requests.get(link)
+        soup = BeautifulSoup(response.text, 'lxml')
+        
+        for li in soup.find_all('li', class_='usa-card'):
+            item = {}
+        # Extract title and link
+            h2 = li.find('h2', class_='usa-card__heading')
+            a_tag = h2.find('a', href=True)
+            item['title'] = a_tag.get_text(strip=True)
+            item['link'] = a_tag['href']
+            # Extract date and category
+            date_span = li.find('span', class_='text-base-dark')
+            if date_span:  # Check if date_span is not None
+                item['date'] = date_span.get_text(strip=True)
+
+            category_li = li.find('ul',
+             class_ = 'display-inline add-list-reset')
+            item['category'] = category_li.get_text(strip=True)
+            enforcements.append(item)
+        print(link)
+        # Add a 1-second delay between requests
+        time.sleep(1)
+    # Creating dataframe of enforcements:
+    df_enforcements = pd.DataFrame(enforcements)
+    print(len(df_enforcements))
+    df_enforcements['date'] = pd.to_datetime(df_enforcements['date'])
+    df_enforcements = df_enforcements[(df_enforcements['date'] >= start_date) & (df_enforcements['date'] <= datetime.datetime.now())]
+    df_enforcements.to_csv('enforcement_actions_year_month.csv',
+    index = False)
+    return df_enforcements
+
+```
+
+```{python}
+df_test = scrape_hhs_oig(2023, 11)
+```
+
+```{python}
+page = soup.find('a', class_='pagination__link')
+page_url = page['href']
+page_url = ("https://oig.hhs.gov/fraud/enforcement/" + 
+page_url)
+page_url
 ```
 
 ```{python}
@@ -250,24 +334,20 @@ for li in soup.find_all('li', class_='usa-card'):
 
     # Extract title and link
     h2 = li.find('h2', class_='usa-card__heading')
-    if h2:
-        a_tag = h2.find('a', href=True)
-        if a_tag:
-            item['title'] = a_tag.get_text(strip=True)
-            item['link'] = a_tag['href']
+    a_tag = h2.find('a', href=True)
+    if a_tag:
+        item['title'] = a_tag.get_text(strip=True)
+        item['link'] = a_tag['href']
     
     # Extract date and category
     date_span = li.find('span', class_='text-base-dark')
-    if date_span:
-        item['date'] = date_span.get_text(strip=True)
+    item['date'] = date_span.get_text(strip=True)
     
     category_li = li.find(lambda t: t.name == 'header' and t.find('div') and t.find('span') and t.find('ul'))
-    if category_li:
-        item['category'] = category_li.get_text(strip=True)
+    item['category'] = category_li.get_text(strip=True)
 
-    # Append item to data list if it has content
-    if item:
-        test.append(item)
+    # Append item to data list if it has content:
+    test.append(item)
 
 ```
 
