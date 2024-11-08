@@ -15,7 +15,7 @@ Submission Steps (10 pts)
 1. This problem set is a paired problem set.
 2. Play paper, scissors, rock to determine who goes first. Call that person Partner 1.
 • Partner 1 (Daniel Avila, davila2020):
-• Partner 2 (name and cnet ID):
+• Partner 2 (Nasser Alshaya, alshaya):
 
 
 
@@ -23,7 +23,7 @@ Submission Steps (10 pts)
 can only share it with one partner so you will not be able to change it after your partner
 has accepted.
 4. “This submission is our work alone and complies with the 30538 integrity policy.” Add
-your initials to indicate your agreement: **DA** **__**
+your initials to indicate your agreement: **DA** **NA**
 
 
 
@@ -99,7 +99,11 @@ ul_children_category = soup.find_all(lambda t: t.name == 'ul' and t.find_all("sp
 category_list = []
 for category in ul_children_category:
     for li in category.find_all("li"):
+<<<<<<< HEAD
         category = li.get_text()
+=======
+        category = li.get_text("")
+>>>>>>> 149f643c24f3f386f632ff143e9c240727ba66a4
         category_list.append(category)
 
 for i in range(len(category_list)):
@@ -166,15 +170,97 @@ a. (Partner 2) Before writing out your function, write down pseudo-code of the s
 your function will go through. If you use a loop, discuss what kind of loop you will use
 and how you will define it.
 
+```
+Step 0: visually inspect the page to determine what need scrapping.
+Step 1: define constant variables needed: source_link, start_date, 
+Step 2: set condition to assure input year larger than 2013
+Step 3: using a for loop, iterate over the range of pages based on f-string for the link of next page.
+Step 4: the loop will scrape every page and extract the data needed to build the dataset basec an their tags and classes and add them to an empty dictionary which will the results of ecah iteration will be appended to an empty list to collect all data in one object; an if condition to break the loop based on strating date is included as well.
+Step 5: the function stores the resulted dataset and then converts it to a csv file.
+```
+
 b. (Partner 2) Now code up your dynamic scraper and run it to start collecting the enforce-
 ment actions since January 2023. How many enforcement actions do you get in your final
 dataframe? What is the date and details of the earliest enforcement action it scraped?
+
+```
+I ended up with 1530 enforcement actions and the details of the earliest one are shown below
+```
+
+```{python}
+import datetime
+def scrape_hhs_oig(year, month):
+    """
+    Scrapes the HHS OIG's Enforcement Actions page for a given year and month.
+
+    Args:
+        year (int): The year to filter by.
+        month (int): The month to filter by.
+
+    Returns:
+        list: A dataframe containing the scraped data.
+    """
+    source_link = "https://oig.hhs.gov"
+    start_date = datetime.datetime(year, month, 1)
+    if year < 2013:
+        print("Please input a year greater than or equal to 2013.")
+        return
+    enforcements =[]
+    # Crawling:
+    for i in range(480):
+        link = f'https://oig.hhs.gov/fraud/enforcement/?page={i}'
+        response = requests.get(link)
+        soup = BeautifulSoup(response.text, 'lxml')
+        
+        for li in soup.find_all('li', class_='usa-card'):
+            item = {}
+        # Extract title and link
+            h2 = li.find('h2', class_='usa-card__heading')
+            a_tag = h2.find('a', href=True)
+            item['title'] = a_tag.get_text(strip=True)
+            item['link'] = source_link + a_tag['href']
+            # Extract date and category
+            date_span = li.find('span', class_='text-base-dark')
+            action_date_str = date_span.get_text(strip=True)
+            action_date = datetime.datetime.strptime(action_date_str, '%B %d, %Y')
+            if action_date < start_date:
+                df_enforcements = pd.DataFrame(enforcements)
+                df_enforcements.to_csv('enforcement_actions_year_month.csv',index = False)
+                return df_enforcements
+            else:
+                item['date'] = action_date_str
+
+            category_li = li.find('ul',
+             class_ = 'display-inline add-list-reset')
+            item['category'] = category_li.get_text(strip=True)
+            enforcements.append(item)
+        # Add a 1-second delay between requests
+        time.sleep(1)
+    # Creating dataframe of enforcements:
+    df_enforcements = pd.DataFrame(enforcements)
+    df_enforcements.to_csv('enforcement_actions_year_month.csv',
+    index = False)
+    return df_enforcements
+
+```
+
+
+```{python}
+# Details of earliest enforcement action scrapped
+scrape_hhs_oig(2023, 1).tail(1)
+
+```
 
 c. (Partner 1) Now, let’s go a little further back. Test your partner’s code by collecting
 the actions since January 2021. Note that this can take a while. How many enforcement
 actions do you get in your final dataframe? What is the date and details of the earliest
 enforcement action it scraped? Use the dataframe from this process for every question
 after this.
+
+```{python}
+scarpe_hhs_oig(2021,1).tail(1)
+```
+
 Hint:
 a. If you go to the next page in this HHS OIG’s “Enforcement Actions” page, you’ll notice
 a pattern:
