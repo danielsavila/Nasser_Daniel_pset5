@@ -180,7 +180,7 @@ ment actions since January 2023. How many enforcement actions do you get in your
 dataframe? What is the date and details of the earliest enforcement action it scraped?
 
 ```
-I ended up with 813 enforcement actions and the details of the earliest one are shown below
+I ended up with 1530 enforcement actions and the details of the earliest one are shown below
 ```
 
 ```{python}
@@ -243,7 +243,7 @@ def scrape_hhs_oig(year, month):
 
 ```{python}
 # Details of earliest enforcement action scrapped
-scrape_hhs_oig(2023, 11).tail(1)
+scrape_hhs_oig(2023, 1).tail(1)
 
 ```
 
@@ -252,6 +252,11 @@ the actions since January 2021. Note that this can take a while. How many enforc
 actions do you get in your final dataframe? What is the date and details of the earliest
 enforcement action it scraped? Use the dataframe from this process for every question
 after this.
+
+```{python}
+scarpe_hhs_oig(2021,1).tail(1)
+```
+
 Hint:
 a. If you go to the next page in this HHS OIG’s “Enforcement Actions” page, you’ll notice
 a pattern:
