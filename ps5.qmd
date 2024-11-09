@@ -154,7 +154,11 @@ Step 5: the function stores the resulted dataset and then converts it to a csv f
 
 * b. Create Dynamic Scraper (PARTNER 2)
 
-I ended up with `1530` enforcement actions and the details of the earliest one are shown below
+I ended up with `1553` enforcement actions and the details of the earliest one are as the following:
+Title: Podiatrist Pays $90,000 To Settle False Billin..
+Date: January 3, 2023
+Category: Criminal and Civil Actions
+Agency: U.S. Attorney’s Office, Southern District of Texas
 
 ```{python}
 import datetime
@@ -183,12 +187,12 @@ def scrape_hhs_oig(year, month):
         
         for li in soup.find_all('li', class_='usa-card'):
             item = {}
-        # Extract title and link
+            # Extract Title and Link
             h2 = li.find('h2', class_='usa-card__heading')
             a_tag = h2.find('a', href=True)
             item['title'] = a_tag.get_text(strip=True)
             item['link'] = source_link + a_tag['href']
-            # Extract date and category
+            # Extract Date and Category
             date_span = li.find('span', class_='text-base-dark')
             action_date_str = date_span.get_text(strip=True)
             action_date = datetime.datetime.strptime(action_date_str, '%B %d, %Y')
@@ -198,11 +202,20 @@ def scrape_hhs_oig(year, month):
                 return df_enforcements
             else:
                 item['date'] = action_date_str
-
+            # Extract Category
             category_li = li.find('ul',
              class_ = 'display-inline add-list-reset')
             item['category'] = category_li.get_text(strip=True)
             enforcements.append(item)
+            # Extract Agency:
+            agency_response = requests.get(item['link'])
+            agency_soup = BeautifulSoup(agency_response.text, 'lxml')
+            for li in agency_soup.find_all('article',class_ ='grid-col desktop:grid-col-10 margin-bottom-2 desktop:margin-bottom-5'):
+                agency_li = li.find_all('li')[1]
+                agency_name = agency_li.text.replace(
+                    'Agency:', '').strip()
+                item["Agency"] = agency_name
+                break
         # Add a 1-second delay between requests
         time.sleep(1)
     # Creating dataframe of enforcements:
@@ -214,15 +227,17 @@ def scrape_hhs_oig(year, month):
 ```
 
 ```{python}
-# Details of earliest enforcement action scrapped
-scrape_hhs_oig(2023, 1).tail(1)
+# Details of earliest enforcement action scrapped, 
+# commented out to speed knitting:
+#scrape_hhs_oig(2023, 1).tail(1)
 ```
 
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
-df_2021 = scrape_hhs_oig(2021,1)
-df_2021.tail(1)
+# Commenetd out to speed knitting:
+#df_2021 = scrape_hhs_oig(2021,1)
+#df_2021.tail(1)
 ```
 
 ## Step 3: Plot data based on scraped data
@@ -232,6 +247,10 @@ df_2021.tail(1)
 Upon visual inspection of the plot, the number of enforcemnt actions fluctuates between 40 and 90, with a minimum count of 30 in November of this year after a rapid decrease in comparison to the previous month.
 
 ```{python}
+import os
+base_path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5'
+path_data = os.path.join(base_path,'enforcement_actions_year_month.csv')
+df_2021 = pd.read_csv(path_data)
 line_chart = alt.Chart(df_2021).mark_line(point=True).encode(
     x=alt.X('yearmonth(date):T', title = 'Month/Year',
      axis =alt.Axis(tickCount = 48, labelAngle = -60)),
@@ -273,6 +292,39 @@ line_chart
 
 ```{python}
 import geopandas as gpd
+
+filepath = '/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
+path_districts = os.path.join(
+    filepath,'geo_export_3d06657f-30d6-461b-af00-153ad6e863c9.shp')
+path_census = os.path.join(filepath,'cb_2018_us_cd116_500k.shp')
+df_census = gpd.read_file(path_census)
+df_districts = gpd.read_file(path_districts)
+
+# Cleaning district names 
+df_2021['Agency'] = df_2021['Agency'].apply(
+    lambda x: x.split(',', 1)[1].strip() if isinstance(x, str) and ',' in x 
+    else x)
+
+df_grouped = df_2021.groupby('Agency').size().reset_index(name='count')
+
+df_merged = df_districts.merge(df_grouped, left_on = 'name' ,right_on='Agency',how = 'inner')
+```
+
+
+```{python}
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+df_merged.plot(column='count', ax=ax, legend=True)
+ax.set_title('Number of Enforcement Actions by US Attorney District')
+# To zoom in for a larger map
+ax.set_xlim(-180 ,-50)
+for idx, row in df_merged.iterrows():
+    centroid = row['geometry'].centroid
+    ax.text(centroid.x, centroid.y, str(row['count']), 
+            fontsize=6, ha='center', va='center', color='white')
+ax.axis('off')
+plt.show()
 ```
 
 ## Extra Credit
