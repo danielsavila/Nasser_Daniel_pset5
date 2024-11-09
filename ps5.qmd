@@ -331,15 +331,59 @@ plt.show()
 
 ### 1. Merge zip code shapefile with population
 ```{python}
+# Loading data:
+filepath = "/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/problem-set-4-nasser-daniel"
+path_shp = os.path.join(filepath,
+ "gz_2010_us_860_00_500k.shp")
+df_zip = gpd.read_file(path_shp)
+
+path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
+pop_data = os.path.join(path,'DECENNIALDHC2020.P1-Data.csv')
+df_zip_pop = pd.read_csv(pop_data)
+
+# Clean zip population columns:
+df_zip_pop  = df_zip_pop.iloc[1:]
+df_zip_pop['NAME'] = df_zip_pop['NAME'].apply(lambda x: x.replace('ZCTA5 ', ''))
+
+# Merging datasets for zip codes:
+df_merged_zips = df_zip.merge(df_zip_pop,
+ left_on = 'ZCTA5', right_on = 'NAME', how = 'inner')
 
 ```
 
 ### 2. Conduct spatial join
 ```{python}
+spatial_joint = gpd.sjoin(df_merged_zips,df_districts,how = 'inner', predicate = 'intersects')
 
+district_pop = spatial_joint.groupby('name').agg(
+    population = ('P1_001N', 'count'),
+    zip = ('ZCTA5', 'first'),
+    geometry = ('geometry', 'first')
+).reset_index()
 ```
 
 ### 3. Map the action ratio in each district
-```{python}
 
+```{python}
+district_ratio = district_pop.merge(df_merged, on ='name',how = 'inner')
+district_ratio['ratio'] = round(
+    district_ratio['count']/district_ratio['population'],3)*100 
+agg_ratio = district_ratio.groupby('name').agg(
+    geometry = ('geometry_y','first'),
+    ratio = ('ratio','first')
+)
+```
+
+```{python}
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+agg_ratio.plot(column='ratio', ax=ax,)
+ax.set_title('Ratio of Enforcement Actions per population in % since 2021')
+# To zoom in for a larger map
+ax.set_xlim(-180 ,-50)
+for idx, row in agg_ratio.iterrows():
+    centroid = row['geometry'].centroid
+    ax.text(centroid.x, centroid.y, str(row['ratio']), 
+            fontsize=6, ha='center', va='center', color='white')
+ax.axis('off')
+plt.show()
 ```
