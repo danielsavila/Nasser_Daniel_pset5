@@ -392,7 +392,8 @@ df_zip_pop = pd.read_csv(pop_data)
 
 # Clean zip population columns:
 df_zip_pop  = df_zip_pop.iloc[1:]
-df_zip_pop['NAME'] = df_zip_pop['NAME'].apply(lambda x: x.replace('ZCTA5 ', ''))
+df_zip_pop['NAME'] = df_zip_pop['NAME'].apply(
+    lambda x: x.replace('ZCTA5 ', ''))
 
 # Merging datasets for zip codes:
 df_merged_zips = df_zip.merge(df_zip_pop,
@@ -405,7 +406,8 @@ gate to get population in each district.
 
 ```{python}
 
-spatial_joint = gpd.sjoin(df_merged_zips,df_districts,how = 'inner', predicate = 'intersects')
+spatial_joint = gpd.sjoin(
+    df_merged_zips,df_districts,how = 'inner', predicate = 'intersects')
 
 district_pop = spatial_joint.groupby('name').agg(
     population = ('P1_001N', 'count'),
@@ -426,19 +428,19 @@ agg_ratio = district_ratio.groupby('name').agg(
     geometry = ('geometry_y','first'),
     ratio = ('ratio','first')
 )
-```
 
+```
 
 ```{python}
 fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-agg_ratio.plot(column='ratio', ax=ax,)
+spatial_joint.plot(column='name', ax=ax,)
 ax.set_title('Ratio of Enforcement Actions per population in % since 2021')
 # To zoom in for a larger map
 ax.set_xlim(-180 ,-50)
 for idx, row in agg_ratio.iterrows():
     centroid = row['geometry'].centroid
     ax.text(centroid.x, centroid.y, str(row['ratio']), 
-            fontsize=6, ha='center', va='center', color='white')
+            fontsize=6, ha='center', va='center', color='black')
 ax.axis('off')
 plt.show()
 ```
