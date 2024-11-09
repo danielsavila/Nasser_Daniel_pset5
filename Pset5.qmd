@@ -111,10 +111,11 @@ for i in range(len(category_list)):
         pass
 
 #links
+base_link = 'https://oig.hhs.gov/fraud/enforcement'
 links_list = []
 for item in ul_children:
     for a in item.find_all('a'):
-        links_list.append(a["href"])
+        links_list.append(base_link + a["href"])
 
 df = pd.DataFrame({
     "ea_titles": titles_list,
