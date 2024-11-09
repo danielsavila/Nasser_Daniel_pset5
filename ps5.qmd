@@ -150,11 +150,16 @@ Step 1: define constant variables needed: source_link, start_date,
 Step 2: set condition to assure input year larger than 2013
 Step 3: using a for loop, iterate over the range of pages based on f-string for the link of next page.
 Step 4: the loop will scrape every page and extract the data needed to build the dataset basec an their tags and classes and add them to an empty dictionary which will the results of ecah iteration will be appended to an empty list to collect all data in one object; an if condition to break the loop based on strating date is included as well.
-Step 5: the function stores the resulted dataset and then converts it to a csv file.
+Step 5: an inner for loop will visit all extracted links and scrape the page of each enforcement to extract the agency name, an if condition will check whether an agency exsists or not and store the text value accoringly.
+Step 6: the function stores the resulted dataset and then converts it to a csv file.
 
 * b. Create Dynamic Scraper (PARTNER 2)
 
-I ended up with `1530` enforcement actions and the details of the earliest one are shown below
+I ended up with `1553` enforcement actions and the details of the earliest one are as the following:
+Title: Podiatrist Pays $90,000 To Settle False Billin..
+Date: January 3, 2023
+Category: Criminal and Civil Actions
+Agency: U.S. Attorney’s Office, Southern District of Texas
 
 ```{python}
 import datetime
@@ -198,11 +203,27 @@ def scrape_hhs_oig(year, month):
                 return df_enforcements
             else:
                 item['date'] = action_date_str
-
+            # Extract categories:
             category_li = li.find('ul',
              class_ = 'display-inline add-list-reset')
             item['category'] = category_li.get_text(strip=True)
             enforcements.append(item)
+            # Extract Agency:
+            agency_response = requests.get(item['link'])
+            agency_soup = BeautifulSoup(agency_response.text, 'lxml')
+        
+            for li in agency_soup.find_all('article', class_='grid-col desktop:grid-col-10 margin-bottom-2 desktop:margin-bottom-5'):
+                agency_li = li.find_all('li')
+                agency_name = next(
+                    (item.text.replace('Agency:', '').strip() for
+                     item in agency_li if item.find('span') and 'Agency:' 
+                     in item.find('span').text),None)
+                if agency_name:
+                    item["Agency"] = agency_name
+                    break
+                else:
+                    item["Agency"] = None
+                    break 
         # Add a 1-second delay between requests
         time.sleep(1)
     # Creating dataframe of enforcements:
@@ -214,15 +235,17 @@ def scrape_hhs_oig(year, month):
 ```
 
 ```{python}
-# Details of earliest enforcement action scrapped
-scrape_hhs_oig(2023, 1).tail(1)
+# Details of earliest enforcement action scrapped, 
+# commented out to speed knitting:
+scrape_hhs_oig(2024, 10).tail(1)
 ```
 
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
-df_2021 = scrape_hhs_oig(2021,1)
-df_2021.tail(1)
+# Commenetd out to speed knitting:
+#df_2021 = scrape_hhs_oig(2021,1)
+#df_2021.tail(1)
 ```
 
 ## Step 3: Plot data based on scraped data
@@ -232,6 +255,10 @@ df_2021.tail(1)
 Upon visual inspection of the plot, the number of enforcemnt actions fluctuates between 40 and 90, with a minimum count of 30 in November of this year after a rapid decrease in comparison to the previous month.
 
 ```{python}
+import os
+base_path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
+path_data = os.path.join(base_path,'enforcement_actions_year_month.csv')
+df_2021 = pd.read_csv(path_data)
 line_chart = alt.Chart(df_2021).mark_line(point=True).encode(
     x=alt.X('yearmonth(date):T', title = 'Month/Year',
      axis =alt.Axis(tickCount = 48, labelAngle = -60)),
@@ -273,21 +300,102 @@ line_chart
 
 ```{python}
 import geopandas as gpd
+
+filepath = '/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
+path_districts = os.path.join(
+    filepath,'geo_export_3d06657f-30d6-461b-af00-153ad6e863c9.shp')
+path_census = os.path.join(filepath,'cb_2018_us_cd116_500k.shp')
+df_census = gpd.read_file(path_census)
+df_districts = gpd.read_file(path_districts)
+
+# Cleaning district names 
+df_2021['Agency'] = df_2021['Agency'].apply(
+    lambda x: x.split(',', 1)[1].strip() if isinstance(x, str) and ',' in x 
+    else x)
+
+df_grouped = df_2021.groupby('Agency').size().reset_index(name='count')
+
+df_merged = df_districts.merge(df_grouped, left_on = 'name' ,right_on='Agency',how = 'inner')
+```
+
+
+```{python}
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+df_merged.plot(column='count', ax=ax, legend=True)
+ax.set_title('Number of Enforcement Actions by US Attorney District')
+# To zoom in for a larger map
+ax.set_xlim(-180 ,-50)
+for idx, row in df_merged.iterrows():
+    centroid = row['geometry'].centroid
+    ax.text(centroid.x, centroid.y, str(row['count']), 
+            fontsize=6, ha='center', va='center', color='white')
+ax.axis('off')
+plt.show()
 ```
 
 ## Extra Credit
 
 ### 1. Merge zip code shapefile with population
 ```{python}
+# Loading data:
+filepath = "/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/problem-set-4-nasser-daniel"
+path_shp = os.path.join(filepath,
+ "gz_2010_us_860_00_500k.shp")
+df_zip = gpd.read_file(path_shp)
+
+path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
+pop_data = os.path.join(path,'DECENNIALDHC2020.P1-Data.csv')
+df_zip_pop = pd.read_csv(pop_data)
+
+# Clean zip population columns:
+df_zip_pop  = df_zip_pop.iloc[1:]
+df_zip_pop['NAME'] = df_zip_pop['NAME'].apply(
+    lambda x: x.replace('ZCTA5 ', ''))
+
+# Merging datasets for zip codes:
+df_merged_zips = df_zip.merge(df_zip_pop,
+ left_on = 'ZCTA5', right_on = 'NAME', how = 'inner')
 
 ```
 
 ### 2. Conduct spatial join
 ```{python}
+spatial_joint = gpd.sjoin(
+    df_merged_zips,df_districts,how = 'inner', predicate = 'intersects')
 
+district_pop = spatial_joint.groupby('name').agg(
+    population = ('P1_001N', 'count'),
+    zip = ('ZCTA5', 'first'),
+    geometry = ('geometry', 'first')
+).reset_index()
 ```
 
 ### 3. Map the action ratio in each district
-```{python}
 
+```{python}
+district_ratio = district_pop.merge(df_merged, on ='name',how = 'inner')
+
+district_ratio['ratio'] = round(
+    district_ratio['count']/district_ratio['population'],3)*100 
+
+agg_ratio = district_ratio.groupby('name').agg(
+    geometry = ('geometry_y','first'),
+    ratio = ('ratio','first'))
+
+```
+
+```{python}
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+spatial_joint.plot(column='name', ax=ax,)
+ax.set_title('Ratio of Enforcement Actions per population in % since 2021')
+# To zoom in for a larger map
+ax.set_xlim(-180 ,-50)
+for idx, row in agg_ratio.iterrows():
+    centroid = row['geometry'].centroid
+    ax.text(centroid.x, centroid.y, str(row['ratio']), 
+            fontsize=6, ha='center', va='center', color='black')
+ax.axis('off')
+plt.show()
 ```
