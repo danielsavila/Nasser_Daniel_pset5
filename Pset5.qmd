@@ -261,7 +261,8 @@ after this.
 
 
 ```{python}
-df_2021 = scrape_hhs_oig(2021,1)
+# Commented out to speed knitting, a csv file extracted to be used 
+#df_2021 = scrape_hhs_oig(2021,1)
 ```
 
 Hint:
@@ -283,6 +284,10 @@ that is more appropriate for this task.
 time (aggregated to each month+year) overall since January 2021.
 
 ```{python}
+import os
+base_path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5'
+path_data = os.path.join(base_path,'enforcement_actions_year_month.csv')
+df_2021 = pd.read_csv(path_data)
 line_chart = alt.Chart(df_2021).mark_line(point=True).encode(
     x=alt.X('yearmonth(date):T', title = 'Month/Year',
      axis =alt.Axis(tickCount = 48, labelAngle = -60)),
@@ -324,26 +329,40 @@ Hint: look for “District” in the agency info.
 import geopandas as gpd
 
 filepath = '/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
-#path_districts = os.path.join(filepath,'geo_export_3d06657f-30d6-461b-af00-153ad6e863c9.shp')
-path_census = os.path.join(filepath,
- 'cb_2018_us_cd116_500k.shp')
-
-#df_districts = gpd.read_file(path_districts)
-districts_path = os.path.join(filepath,'US_Attorney_Districts_Shapefile_simplified_20241107.csv')
-df_districts = pd.read_csv(districts_path)
+path_districts = os.path.join(
+    filepath,'geo_export_3d06657f-30d6-461b-af00-153ad6e863c9.shp')
+path_census = os.path.join(filepath,'cb_2018_us_cd116_500k.shp')
 df_census = gpd.read_file(path_census)
+df_districts = gpd.read_file(path_districts)
 
-df_districts["STATEFP"] = df_districts["STATEFP"].astype(str)
-df_districts["Judicial District "] = df_districts["Judicial District "].astype(str)
-df_merged = df_districts.merge(df_census, on = "STATEFP" ,how = 'left')
+# Cleaning district names 
+df_2021['Agency'] = df_2021['Agency'].apply(
+    lambda x: x.split(',', 1)[1].strip() if isinstance(x, str) and ',' in x 
+    else x)
+
+df_grouped = df_2021.groupby('Agency').size().reset_index(name='count')
+
+df_merged = df_districts.merge(df_grouped, left_on = 'name' ,right_on='Agency',how = 'inner')
 ```
 
 
 ```{python}
+df_merged = df_grouped.merge(df_districts, left_on = 'Agency' ,right_on='name',how = 'inner')
+```
+
+```{python}
 import matplotlib.pyplot as plt
 
-df_merged.plot(column = "Judicial District", linewidth=0.2)
-plt.axis("off")
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+df_merged.plot(column='count', ax=ax, legend=True)
+ax.set_title('Number of Enforcement Actions by US Attorney District')
+# To zoom in for a larger map
+ax.set_xlim(-180 ,-50)
+for idx, row in df_merged.iterrows():
+    centroid = row['geometry'].centroid
+    ax.text(centroid.x, centroid.y, str(row['count']), 
+            fontsize=6, ha='center', va='center', color='white')
+ax.axis('off')
 plt.show()
 ```
 
