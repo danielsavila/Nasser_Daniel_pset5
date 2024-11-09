@@ -150,7 +150,8 @@ Step 1: define constant variables needed: source_link, start_date,
 Step 2: set condition to assure input year larger than 2013
 Step 3: using a for loop, iterate over the range of pages based on f-string for the link of next page.
 Step 4: the loop will scrape every page and extract the data needed to build the dataset basec an their tags and classes and add them to an empty dictionary which will the results of ecah iteration will be appended to an empty list to collect all data in one object; an if condition to break the loop based on strating date is included as well.
-Step 5: the function stores the resulted dataset and then converts it to a csv file.
+Step 5: an inner for loop will visit all extracted links and scrape the page of each enforcement to extract the agency name, an if condition will check whether an agency exsists or not and store the text value accoringly.
+Step 6: the function stores the resulted dataset and then converts it to a csv file.
 
 * b. Create Dynamic Scraper (PARTNER 2)
 
@@ -187,12 +188,12 @@ def scrape_hhs_oig(year, month):
         
         for li in soup.find_all('li', class_='usa-card'):
             item = {}
-            # Extract Title and Link
+        # Extract title and link
             h2 = li.find('h2', class_='usa-card__heading')
             a_tag = h2.find('a', href=True)
             item['title'] = a_tag.get_text(strip=True)
             item['link'] = source_link + a_tag['href']
-            # Extract Date and Category
+            # Extract date and category
             date_span = li.find('span', class_='text-base-dark')
             action_date_str = date_span.get_text(strip=True)
             action_date = datetime.datetime.strptime(action_date_str, '%B %d, %Y')
@@ -202,7 +203,7 @@ def scrape_hhs_oig(year, month):
                 return df_enforcements
             else:
                 item['date'] = action_date_str
-            # Extract Category
+            # Extract categories:
             category_li = li.find('ul',
              class_ = 'display-inline add-list-reset')
             item['category'] = category_li.get_text(strip=True)
@@ -210,12 +211,19 @@ def scrape_hhs_oig(year, month):
             # Extract Agency:
             agency_response = requests.get(item['link'])
             agency_soup = BeautifulSoup(agency_response.text, 'lxml')
-            for li in agency_soup.find_all('article',class_ ='grid-col desktop:grid-col-10 margin-bottom-2 desktop:margin-bottom-5'):
-                agency_li = li.find_all('li')[1]
-                agency_name = agency_li.text.replace(
-                    'Agency:', '').strip()
-                item["Agency"] = agency_name
-                break
+        
+            for li in agency_soup.find_all('article', class_='grid-col desktop:grid-col-10 margin-bottom-2 desktop:margin-bottom-5'):
+                agency_li = li.find_all('li')
+                agency_name = next(
+                    (item.text.replace('Agency:', '').strip() for
+                     item in agency_li if item.find('span') and 'Agency:' 
+                     in item.find('span').text),None)
+                if agency_name:
+                    item["Agency"] = agency_name
+                    break
+                else:
+                    item["Agency"] = None
+                    break 
         # Add a 1-second delay between requests
         time.sleep(1)
     # Creating dataframe of enforcements:
@@ -229,7 +237,7 @@ def scrape_hhs_oig(year, month):
 ```{python}
 # Details of earliest enforcement action scrapped, 
 # commented out to speed knitting:
-#scrape_hhs_oig(2023, 1).tail(1)
+scrape_hhs_oig(2024, 10).tail(1)
 ```
 
 * c. Test Partner's Code (PARTNER 1)
@@ -248,7 +256,7 @@ Upon visual inspection of the plot, the number of enforcemnt actions fluctuates 
 
 ```{python}
 import os
-base_path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5'
+base_path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
 path_data = os.path.join(base_path,'enforcement_actions_year_month.csv')
 df_2021 = pd.read_csv(path_data)
 line_chart = alt.Chart(df_2021).mark_line(point=True).encode(
@@ -348,7 +356,6 @@ df_zip_pop['NAME'] = df_zip_pop['NAME'].apply(lambda x: x.replace('ZCTA5 ', ''))
 # Merging datasets for zip codes:
 df_merged_zips = df_zip.merge(df_zip_pop,
  left_on = 'ZCTA5', right_on = 'NAME', how = 'inner')
-
 ```
 
 ### 2. Conduct spatial join
@@ -365,13 +372,10 @@ district_pop = spatial_joint.groupby('name').agg(
 ### 3. Map the action ratio in each district
 
 ```{python}
-district_ratio = district_pop.merge(df_merged, on ='name',how = 'inner')
-district_ratio['ratio'] = round(
-    district_ratio['count']/district_ratio['population'],3)*100 
-agg_ratio = district_ratio.groupby('name').agg(
-    geometry = ('geometry_y','first'),
-    ratio = ('ratio','first')
-)
+district_ratio = district_pop.merge(
+    df_merged, on ='name',how = 'inner')
+district_ratio['ratio'] = round(district_ratio['count']/district_ratio['population'],3)*100 
+agg_ratio = district_ratio.groupby('name').agg(geometry = ('geometry_y','first'),ratio = ('ratio','first'))
 ```
 
 ```{python}
