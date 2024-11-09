@@ -272,15 +272,20 @@ def scrape_hhs_oig(year, month):
 ```{python}
 # Details of earliest enforcement action scrapped, 
 # commented out to speed knitting:
+
+''' for daniel DO NOT RUN, DELETE BEFORE SUBMITTING
+
 scrape_hhs_oig(2024, 10).tail(1)
+
+'''
 ```
 
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
 # Commenetd out to speed knitting:
-#df_2021 = scrape_hhs_oig(2021,1)
-#df_2021.tail(1)
+df_2021 = scrape_hhs_oig(2021,1)
+df_2021.tail(1)
 ```
 
 ## Step 3: Plot data based on scraped data
@@ -291,7 +296,7 @@ Upon visual inspection of the plot, the number of enforcemnt actions fluctuates 
 
 ```{python}
 import os
-base_path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
+base_path = r'c:/Users/danie/Documents/GitHub/Nasser_Daniel_pset5'
 path_data = os.path.join(base_path,'enforcement_actions_year_month.csv')
 df_2021 = pd.read_csv(path_data)
 line_chart = alt.Chart(df_2021).mark_line(point=True).encode(
@@ -314,11 +319,87 @@ line_chart
 
 ```{python}
 
+df_criminal_civil = df_2021
+df_criminal_civil = df_2021[(df_2021["category"] == "Criminal and Civil Actions") | (df_2021["category"] == "State Enforcement Agencies")]
+line_criminal_state = alt.Chart(df_criminal_civil).mark_line(point = True).encode(
+    x = alt.X("yearmonth(date):T", title = "Month/Year",
+    axis = alt.Axis(tickCount = 48, labelAngle = -60)),
+    y = alt.Y("count():Q", title = "Number of Enforcement Actions"),
+    color = "category:N",
+    tooltip = [alt.Tooltip('yearmonth(date):T', title='Month/Year'),
+             alt.Tooltip('count():Q', title='Criminal Actions/State Enforcement Counts')]
+).properties(
+    title='Number of Enforcement Actions Over Time (Aggregated by Month)',
+    width=800,
+    height=400
+)
+line_criminal_state
+
 ```
 
-* based on five topics
+* five topics
 
 ```{python}
+five_df = df_2021
+
+#health
+health_list = ["Doctor", "Medicare", "Medicaid", "Health", "Physician", "Nurse", "Medi"]
+pattern = "|".join(health_list)
+five_df["Health Care Fraud"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#financial
+financial_list = ["Financial", "Bank", "Insurance", "Market", "Credit", "Bankruptcy"]
+pattern = "|".join(financial_list)
+five_df["Financial Fraud"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#drug
+drug_list = ["Drug", "Pharma", "Ingredient", "Narcot", "Prescription"]
+pattern = "|".join(drug_list)
+five_df["Drug Enforcement"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#bribery
+bribery_list = ["Bribe", "Corruption", "Extortion", "kickback"]
+pattern = "|".join(bribery_list)
+five_df["Bribery/Corruption"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#other
+five_df["Other"] = (
+    (five_df["Health Care Fraud"] == 0) & 
+    (five_df["Financial Fraud"] == 0) & 
+    (five_df["Drug Enforcement"] == 0) & 
+    (five_df["Bribery/Corruption"] == 0)).astype(int)
+
+
+# using this to combine s.t. we have one column of categorical variables
+def combine_column(row):
+    if row["Health Care Fraud"] == 1:
+        return "Health Care Fraud"
+    elif row["Financial Fraud"] == 1:
+        return "Financial Fraud"
+    elif row["Drug Enforcement"] == 1:
+        return "Drug Enforcement"
+    elif row["Bribery/Corruption"] == 1:
+        return "Bribery/Corruption"
+    else:
+        return "Other"
+
+#combining 
+five_df["combined"] = five_df.apply(lambda x: combine_column(x), axis = 1)
+
+#plotting
+line_five = alt.Chart(five_df).mark_line(point = True).encode(
+    x = alt.X("yearmonth(date):T", title = "Month/Year",
+    axis = alt.Axis(tickCount = 48, labelAngle = -60)),
+    y = alt.Y("count():Q", title = "Number of Enforcement Actions"),
+    color = "combined:N",
+    tooltip = [alt.Tooltip('yearmonth(date):T', title='Month/Year'),
+             alt.Tooltip('count():Q', title='Criminal Actions/State Enforcement Counts')]
+).properties(
+    title='Number of Enforcement Actions Over Time (Aggregated by Month)',
+    width=800,
+    height=400
+)
+line_five
 
 ```
 
