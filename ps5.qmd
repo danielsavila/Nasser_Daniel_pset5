@@ -100,7 +100,7 @@ ul_children_category = soup.find_all(lambda t: t.name == 'ul' and t.find_all("sp
 category_list = []
 for category in ul_children_category:
     for li in category.find_all("li"):
-        category = li.get_text("")
+        category = li.get_text()
         category_list.append(category)
 
 for i in range(len(category_list)):
@@ -108,20 +108,22 @@ for i in range(len(category_list)):
 
 category_list = category_list[74:135]
 
-string_check = ["Criminal and Civil Actions", "State Enforcement Agencies"]
+string_check = ["Criminal and Civil Actions", "State Enforcement Agencies", "CMP and Affirmative Exclusions", "Fraud Self-Disclosures"]
 
 category_list_new = []
 for i in range(len(category_list)):
-    if category_list[i] == string_check[0] or category_list[i] == string_check[1]:
-        category_list_new.append(category_list[i])
-    else:
-        pass
+    for j in range(len(string_check)):
+        if category_list[i] == string_check[j]:
+            category_list_new.append(category_list[i])
+        else:
+            pass
 
 #links
 links_list = []
 for item in ul_children:
     for a in item.find_all('a'):
-        links_list.append(a["href"])
+        full_link = "https://oig.hhs.gov/" + a["href"]
+        links_list.append(full_link)
 
 df = pd.DataFrame({
     "ea_titles": titles_list,
@@ -136,6 +138,39 @@ df.head()
 ### 2. Crawling (PARTNER 1)
 
 ```{python}
+df["links"] = df["links"].astype(str)
+li_tags = []
+
+# i want to iterate through the links columns
+for row in range(len(df["links"])):
+    url = df.loc[row, "links"]
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'lxml')
+
+    # parse the html and find the agency
+    li_tag = soup.find_all("li")
+    agency_found = False
+    for li in li_tag:
+        li = li.get_text()
+
+    #searching just for the agency
+        if li.startswith("Agency"):
+            li_tags.append(li)
+            agency_found = True
+            break
+
+    if not agency_found: 
+        li_tags.append("NaN")
+
+# cleaning the "agency:" out
+for agency in range(len(li_tags
+)):
+    li_tags[agency] = li_tags[agency].replace("Agency:", "")
+
+# append the list as a new column into the dataframe
+df["agency"] = li_tags
+
+df
 
 ```
 
