@@ -52,6 +52,9 @@ import time
 import requests
 from bs4 import BeautifulSoup
 import warnings 
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
 warnings.filterwarnings('ignore')
 alt.renderers.enable("png")
 
@@ -170,7 +173,7 @@ for agency in range(len(li_tags
 # append the list as a new column into the dataframe
 df["agency"] = li_tags
 
-df
+df.head()
 
 ```
 
@@ -272,15 +275,17 @@ def scrape_hhs_oig(year, month):
 ```{python}
 # Details of earliest enforcement action scrapped, 
 # commented out to speed knitting:
-scrape_hhs_oig(2024, 10).tail(1)
+
+# scrape_hhs_oig(2024, 10).tail(1)
+
 ```
 
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
 # Commenetd out to speed knitting:
-#df_2021 = scrape_hhs_oig(2021,1)
-#df_2021.tail(1)
+# df_2021 = scrape_hhs_oig(2021,1)
+# df_2021.tail(1)
 ```
 
 ## Step 3: Plot data based on scraped data
@@ -291,7 +296,7 @@ Upon visual inspection of the plot, the number of enforcemnt actions fluctuates 
 
 ```{python}
 import os
-base_path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
+base_path = r'c:/Users/danie/Documents/GitHub/Nasser_Daniel_pset5'
 path_data = os.path.join(base_path,'enforcement_actions_year_month.csv')
 df_2021 = pd.read_csv(path_data)
 line_chart = alt.Chart(df_2021).mark_line(point=True).encode(
@@ -314,11 +319,86 @@ line_chart
 
 ```{python}
 
+df_criminal_civil = df_2021
+df_criminal_civil = df_2021[(df_2021["category"] == "Criminal and Civil Actions") | (df_2021["category"] == "State Enforcement Agencies")]
+line_criminal_state = alt.Chart(df_criminal_civil).mark_line(point = True).encode(
+    x = alt.X("yearmonth(date):T", title = "Month/Year",
+    axis = alt.Axis(tickCount = 48, labelAngle = -60)),
+    y = alt.Y("count():Q", title = "Number of Enforcement Actions"),
+    color = "category:N",
+    tooltip = [alt.Tooltip('yearmonth(date):T', title='Month/Year'),
+             alt.Tooltip('count():Q', title='Criminal Actions/State Enforcement Counts')]
+).properties(
+    title='Number of Enforcement Actions Over Time (Aggregated by Month)',
+    width=800,
+    height=400
+)
+line_criminal_state
+
 ```
 
-* based on five topics
 
 ```{python}
+five_df = df_2021
+
+#health
+health_list = ["Doctor", "Medicare", "Medicaid", "Health", "Physician", "Nurse", "Medi"]
+pattern = "|".join(health_list)
+five_df["Health Care Fraud"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#financial
+financial_list = ["Financial", "Bank", "Insurance", "Market", "Credit", "Bankruptcy"]
+pattern = "|".join(financial_list)
+five_df["Financial Fraud"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#drug
+drug_list = ["Drug", "Pharma", "Ingredient", "Narcot", "Prescription"]
+pattern = "|".join(drug_list)
+five_df["Drug Enforcement"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#bribery
+bribery_list = ["Bribe", "Corruption", "Extortion", "kickback"]
+pattern = "|".join(bribery_list)
+five_df["Bribery/Corruption"] = (five_df["title"].str.contains(pattern, case = False)).astype(int)
+
+#other
+five_df["Other"] = (
+    (five_df["Health Care Fraud"] == 0) & 
+    (five_df["Financial Fraud"] == 0) & 
+    (five_df["Drug Enforcement"] == 0) & 
+    (five_df["Bribery/Corruption"] == 0)).astype(int)
+
+
+# using this to combine s.t. we have one column of categorical variables
+def combine_column(row):
+    if row["Health Care Fraud"] == 1:
+        return "Health Care Fraud"
+    elif row["Financial Fraud"] == 1:
+        return "Financial Fraud"
+    elif row["Drug Enforcement"] == 1:
+        return "Drug Enforcement"
+    elif row["Bribery/Corruption"] == 1:
+        return "Bribery/Corruption"
+    else:
+        return "Other"
+
+#combining 
+five_df["combined"] = five_df.apply(lambda x: combine_column(x), axis = 1)
+
+#plotting
+line_five = alt.Chart(five_df).mark_line(point = True).encode(
+    x = alt.X("yearmonth(date):T", title = "Month/Year",
+    axis = alt.Axis(tickCount = 48, labelAngle = -60)),
+    y = alt.Y("count():Q", title = "Number of Enforcement Actions"),
+    color = "combined:N",
+    tooltip = [alt.Tooltip('yearmonth(date):T', title='Month/Year'),
+             alt.Tooltip('count():Q', title='Criminal Actions/State Enforcement Counts')]
+).properties(
+    title='Number of Enforcement Actions Over Time (Aggregated by Month)',
+    width=800,
+    height=400
+)
+line_five
 
 ```
 
@@ -327,6 +407,65 @@ line_chart
 ### 1. Map by State (PARTNER 1)
 
 ```{python}
+filepath = 'c:/Users/danie/Documents/GitHub/Nasser_Daniel_pset5/'
+path_districts = os.path.join(
+    filepath,'geo_export_3d06657f-30d6-461b-af00-153ad6e863c9.shp')
+path_census = os.path.join(filepath,'cb_2018_us_cd116_500k.shp')
+df_census = gpd.read_file(path_census)
+df_districts = gpd.read_file(path_districts)
+
+#cleaning state names
+s2fp = pd.read_csv("fips2county.tsv", sep='\t', header='infer', dtype=str, encoding='latin-1')
+s2fp = s2fp[["StateFIPS", "StateName"]]
+s2fp.columns = ["STATEFIP", "State"]
+s2fp = s2fp.value_counts().reset_index().drop("count", axis = 1)
+s2fp = s2fp.set_index("STATEFIP")["State"]
+
+# mapping values from s2fp to df_census
+# this gets me state names in census data
+df_census["State"] = df_census["STATEFP"].map(s2fp)
+
+# now need to extract state name in df_2021 and groupby state
+df_2021_state = df_2021.dropna(subset = "Agency").drop_duplicates(keep = "first")
+df_2021_state = df_2021_state[df_2021_state['Agency'].apply(lambda x: x.startswith("State of"))].reset_index()
+df_2021_state["State"] = df_2021_state["Agency"].apply(lambda x: x.replace("State of", ""))
+
+#this is giving me a count of enforcement actions per state done by state level agencies
+df_2021_state_groupby = df_2021_state.groupby("State").size().reset_index(name = "count")
+
+#merging the census geodata with the enforcement activity
+#needed to get rid of values in the census that were not in the enforcement activity
+df_census = df_census.dropna(subset = "State")
+df_census["State"] = df_census["State"].astype(str)
+
+#this is solving an unbelievable whitespace issue
+enforcement_states = df_2021_state_groupby["State"].str.strip().to_list()
+df_census["State"] = df_census["State"].str.strip()
+df_census = df_census[df_census["State"].isin(enforcement_states)]
+df_2021_state_groupby["State"] = df_2021_state_groupby["State"].str.strip()
+
+#merge on the two
+df_census = df_census.merge(df_2021_state_groupby, how = "left", on = "State")
+df_census.head()
+```
+
+```{python}
+'''daniels future plot'''
+
+fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+df_census.plot(column='count', ax=ax)
+ax.set_title('Number of Enforcement Actions by US State', fontsize = 15, va = "center")
+# To zoom in for a larger map
+
+ax.set_xlim(-125, -65)
+ax.set_ylim(20, 50)
+
+for idx, row in df_census.iterrows():
+    centroid = row['geometry'].centroid
+    ax.text(centroid.x, centroid.y, str(row['count']), 
+            fontsize=6, ha='center', va='center', color='white')
+ax.axis('off')
+plt.show()
 
 ```
 
@@ -334,28 +473,14 @@ line_chart
 ### 2. Map by District (PARTNER 2)
 
 ```{python}
-import geopandas as gpd
 
-filepath = '/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
-path_districts = os.path.join(
-    filepath,'geo_export_3d06657f-30d6-461b-af00-153ad6e863c9.shp')
-path_census = os.path.join(filepath,'cb_2018_us_cd116_500k.shp')
-df_census = gpd.read_file(path_census)
-df_districts = gpd.read_file(path_districts)
-
-# Cleaning district names 
-df_2021['Agency'] = df_2021['Agency'].apply(
+df_2021["Agency"] = df_2021["Agency"].apply(
     lambda x: x.split(',', 1)[1].strip() if isinstance(x, str) and ',' in x 
     else x)
 
 df_grouped = df_2021.groupby('Agency').size().reset_index(name='count')
 
 df_merged = df_districts.merge(df_grouped, left_on = 'name' ,right_on='Agency',how = 'inner')
-```
-
-
-```{python}
-import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots(1, 1, figsize=(12, 8))
 df_merged.plot(column='count', ax=ax, legend=True)
@@ -375,13 +500,12 @@ plt.show()
 ### 1. Merge zip code shapefile with population
 ```{python}
 # Loading data:
-filepath = "/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/problem-set-4-nasser-daniel"
+filepath = "c:/Users/danie/Documents/GitHub/Nasser_Daniel_pset5"
 path_shp = os.path.join(filepath,
  "gz_2010_us_860_00_500k.shp")
 df_zip = gpd.read_file(path_shp)
 
-path = r'/Users/nasser.alshaya/Desktop/Fall-2024/PPHA-30538/Repos/Nasser_Daniel_pset5/data'
-pop_data = os.path.join(path,'DECENNIALDHC2020.P1-Data.csv')
+pop_data = os.path.join(filepath,'DECENNIALDHC2020.P1-Data.csv')
 df_zip_pop = pd.read_csv(pop_data)
 
 # Clean zip population columns:
